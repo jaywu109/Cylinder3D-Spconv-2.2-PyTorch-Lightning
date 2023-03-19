@@ -1,0 +1,14 @@
+name: sp_test
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pytorch==1.12.1
+  - torchvision==0.13.1
+  - cudatoolkit=11.3
+  - ca-certificates
+  - certifi
+  - openssl
+  - htop
+prefix: /public/home/wudj/mambaforge-pypy3/envs/sp_test
