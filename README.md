@@ -32,4 +32,4 @@ pip install -r requirements.txt
 
 | GPU Type | Single GPU | 4 GPUs | 
 | -------------- |:---------------------:|---------------------:|
-| A100 | 60 mins    | 25 mins    | 
+| A100 | 60 mins/epoch    | 25 mins/epoch    | 
