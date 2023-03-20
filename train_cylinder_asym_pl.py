@@ -98,7 +98,7 @@ class Cylinder3D(pl.LightningModule):
                                            num_workers=self.train_dataloader_config["num_workers"],
                                            pin_memory=True,
                                            drop_last=True,
-                                           multiprocessing_context=get_context('fork')
+#                                            multiprocessing_context=get_context('fork')
                                            )
     
     def val_dataloader(self):
@@ -108,7 +108,7 @@ class Cylinder3D(pl.LightningModule):
                                            shuffle=self.val_dataloader_config["shuffle"],
                                            num_workers=self.val_dataloader_config["num_workers"],
                                            pin_memory=True,
-                                           multiprocessing_context=get_context('fork')
+#                                            multiprocessing_context=get_context('fork')
                                            )
     
     def forward(self, pt_fea_ten, vox_ten, batch_size):
@@ -259,10 +259,8 @@ if __name__ == '__main__':
         strategy = 'auto'
         use_distributed_sampler = False
 
-    # resume = '/public/home/wudj/Cylinder3D_uda/logs_2/epoch=09-step=9243-val_loss_epoch=1.7565454245.ckpt'
     trainer = pl.Trainer(
         # limit_val_batches=10,
-        # resume_from_checkpoint=resume,
         val_check_interval=val_interval_fraction,
         max_epochs=train_params['max_num_epochs'],
         devices=gpus,
@@ -279,4 +277,8 @@ if __name__ == '__main__':
     )
 
 
-    trainer.fit(model)    
+#     ckpt_path = '/public/home/wudj/Cylinder3D_spconv_v2/logs_multiple_gpu/last.ckpt'
+    trainer.fit(model, 
+#                 ckpt_path=ckpt_path
+                )    
+
