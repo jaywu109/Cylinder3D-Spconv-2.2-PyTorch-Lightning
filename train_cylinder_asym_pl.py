@@ -14,8 +14,6 @@ import sys
 import torch
 # torch.set_float32_matmul_precision('high')
 
-import torch.optim as optim
-from tqdm import tqdm
 
 from utils.metric_util import per_class_iu, fast_hist_crop_torch
 from dataloader.pc_dataset import get_SemKITTI_label_name
@@ -25,10 +23,7 @@ from config.config_pl import load_config_data
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import *
 import pytorch_lightning as pl
-from pytorch_lightning.strategies import DDPStrategy
 from multiprocessing import get_context
-
-from utils.load_save_util import load_checkpoint
 
 import warnings
 
@@ -69,6 +64,7 @@ class Cylinder3D(pl.LightningModule):
         else:
             self.effective_lr = math.sqrt(self.train_batch_size) * self.train_hypers["base_lr"]
 
+        print(self.effective_lr)
         self.save_hyperparameters({'effective_lr': self.effective_lr})
 
         self.train_dataset, self.val_dataset = data_builder_pl.build(self.dataset_config,
@@ -136,20 +132,19 @@ class Cylinder3D(pl.LightningModule):
 
         if self.global_rank == 0:
             self.log('train_loss_step', train_loss_gather, prog_bar=True, rank_zero_only=True)
-            self.logger.experiment.add_scalar('train_loss_step', train_loss_gather, self.global_step)     
+            self.logger.experiment.add_scalar('train_loss_step', train_loss_gather, self.global_step)   
 
-        self.training_step_outputs.append({'loss': loss})
+            with torch.no_grad():
+                self.training_step_outputs.append({'loss': train_loss_gather.cpu().detach()})
+
         return loss
 
     def on_training_epoch_end(self):
-        train_loss_mean = torch.stack([output['loss'] for output in self.training_step_outputs]).mean()   
-
-        if self.gpu_num > 1:     
-            self.log('train_loss_epoch', torch.mean(self.all_gather(train_loss_mean)), prog_bar=True, logger=True)
-        else:
-            self.log('train_loss_epoch', train_loss_mean, prog_bar=True, logger=True)
-
-        self.training_step_outputs.clear()
+        if self.global_rank == 0:
+            train_loss_mean = torch.stack([output['loss'] for output in self.training_step_outputs]).mean()   
+            self.logger.experiment.add_scalar('train_loss_epoch', train_loss_mean, self.current_epoch)   
+            self.log('train_loss_epoch', train_loss_mean, prog_bar=True, logger=False)
+            self.training_step_outputs.clear()
 
     def validation_step(self, batch, batch_idx):
         _, vox_label, grid, pt_labs, pt_fea = batch
@@ -170,30 +165,44 @@ class Cylinder3D(pl.LightningModule):
                                                 count, grid[count][:, 0], grid[count][:, 1],
                                                 grid[count][:, 2]], torch.tensor(pt_labs[count]).type(torch.LongTensor).to(self.device),
                                             self.unique_label))
+            
+        hist_sum = sum(hist_list)    
+        if self.gpu_num > 1:   
+            hist_sum = sum(self.all_gather(hist_sum))
+        validation_loss_gather = self.all_gather(loss).mean()
 
-        self.validation_step_outputs.append({'loss':loss, 'hist': sum(hist_list)})
+        if self.global_rank == 0:   
+                self.validation_step_outputs.append({'loss':validation_loss_gather.cpu().detach(), 'hist': hist_sum.cpu().detach()})
 
     def on_validation_epoch_end(self):
-        loss_list = []
-        hist_list = []
-        for output in self.validation_step_outputs:
-            loss_list.append(output['loss'])
-            hist_list.append(output['hist'])
+        if self.global_rank == 0:
 
-        val_loss_mean = torch.stack(loss_list).mean() 
-        hist_sum = sum(hist_list)
+            loss_list = []
+            hist_list = []
+            for output in self.validation_step_outputs:
+                loss_list.append(output['loss'])
+                hist_list.append(output['hist'])
 
-        if self.gpu_num > 1:     
-            self.log('val_loss_epoch', torch.mean(self.all_gather(val_loss_mean)), prog_bar=True, logger=True)
-            iou = per_class_iu(sum(self.all_gather(hist_sum)).cpu().detach().numpy())
+            val_loss_mean = torch.stack(loss_list).mean() 
+            hist_sum = sum(hist_list)
+
+            self.log('val_loss', val_loss_mean, prog_bar=True, logger=False)
+            self.logger.experiment.add_scalar('val_loss', val_loss_mean, self.global_step)   
+
+            iou = per_class_iu(hist_sum.numpy())
+
+            val_miou = torch.tensor(np.nanmean(iou) * 100).to(self.device)  
+            self.logger.experiment.add_scalar('val_miou', val_miou, self.global_step)   
+
+            self.validation_step_outputs.clear()
+
         else:
-            self.log('val_loss_epoch', val_loss_mean, prog_bar=True, logger=True)
-            iou = per_class_iu(hist_sum.cpu().detach().numpy())
+            val_miou = torch.tensor(0).to(self.device)  
+        
+        if self.gpu_num > 1:
+            val_miou = sum(self.all_gather(val_miou))
 
-        val_miou = np.nanmean(iou) * 100
-        self.log('val_miou_epoch', val_miou, prog_bar=True, logger=True)
-
-        self.validation_step_outputs.clear()
+        self.log('val_miou', val_miou, prog_bar=True, logger=False)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.effective_lr, eps=1e-4, weight_decay=self.train_hypers['weight_decay'])
@@ -235,10 +244,10 @@ if __name__ == '__main__':
                                  save_last=True,
                                  save_top_k=5,
                                  mode='max',
-                                 every_n_train_steps=int(train_steps_per_epoch*val_interval_fraction)+1,
+                                 every_n_train_steps=int(train_steps_per_epoch*val_interval_fraction),
                                 #  every_n_epochs=1,
-                                 filename="{epoch:02d}-{step}-{val_miou_epoch:.3f}",
-                                 monitor="val_miou_epoch")
+                                 filename="{epoch:02d}-{step}-{val_miou:.3f}",
+                                 monitor="val_miou")
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=logdir,
                                              name=None,
                                              version='')
@@ -271,5 +280,3 @@ if __name__ == '__main__':
 
 
     trainer.fit(model)    
-
-
