@@ -4,6 +4,5 @@ pytorch_lightning==2.0.0
 PyYAML==6.0
 spconv_cu114==2.2.6
 strictyaml==1.6.1
-torch==1.12.1
 torch_scatter==2.1.0+pt112cu113
 tqdm==4.64.1
