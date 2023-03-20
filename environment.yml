@@ -1,4 +1,3 @@
-name: sp_test
 channels:
   - defaults
   - conda-forge
@@ -8,4 +7,3 @@ dependencies:
   - certifi
   - openssl
   - htop
-prefix: /public/home/wudj/mambaforge-pypy3/envs/sp_test
