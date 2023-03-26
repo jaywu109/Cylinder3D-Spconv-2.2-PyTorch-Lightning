@@ -1,3 +1,4 @@
+tensorboard
 numba==0.56.4
 numpy==1.22.3
 pytorch_lightning==2.0.0
