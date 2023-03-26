@@ -18,8 +18,8 @@ pip install --no-index torch-scatter -f https://data.pyg.org/whl/torch-1.12.1+cu
 pip install -r requirements.txt
 ```
 ## Training
-1. modify the config/semantickitti_pl.yaml, including data path, log path (tensorboard log and model checkpoint), batch size, ddp training GPU device number
-2. train the network by running "CUDA_VISIBLE_DEVICES=0,1 python train_cylinder_asym_pl.py"
+1. modify the `config/semantickitti_pl.yaml`, including data path, log path (tensorboard log and model checkpoint), batch size, ddp training GPU device number
+2. train the network by running `CUDA_VISIBLE_DEVICES=0,1 python train_cylinder_asym_pl.py`
 
 ### Other Training Details
 - 40 epochs
