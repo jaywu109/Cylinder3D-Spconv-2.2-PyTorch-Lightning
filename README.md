@@ -36,3 +36,26 @@ pip install -r requirements.txt
 | GPU Type | Single GPU | 4 GPUs | 
 | -------------- |:---------------------:|---------------------:|
 | A100 | 60 mins/epoch    | 25 mins/epoch    | 
+
+## Reference
+
+If you find our work useful in your research, please consider citing the original paper [paper](https://arxiv.org/pdf/2011.10033) and the repo:
+```
+@article{zhu2020cylindrical,
+  title={Cylindrical and Asymmetrical 3D Convolution Networks for LiDAR Segmentation},
+  author={Zhu, Xinge and Zhou, Hui and Wang, Tai and Hong, Fangzhou and Ma, Yuexin and Li, Wei and Li, Hongsheng and Lin, Dahua},
+  journal={arXiv preprint arXiv:2011.10033},
+  year={2020}
+}
+@software{githubGitHubJaywu109Cylinder3DSpconv22PyTorchLightning,,
+  author = {Wu, Dai-Jie},
+	title = {{G}it{H}ub - jaywu109/{C}ylinder3{D}-{S}pconv-2.2-{P}y{T}orch-{L}ightning --- github.com},
+  url = {https://github.com/jaywu109/Cylinder3D-Spconv-2.2-PyTorch-Lightning},
+  year = {2023}
+}
+```
+
+## Acknowledgments
+We thanks for the opensource codebases, [Cylinder3D
+](https://github.com/xinge008/Cylinder3D) and [Cylinder3D-updated-CUDA
+](https://github.com/L-Reichardt/Cylinder3D-updated-CUDA)
