@@ -47,9 +47,9 @@ If you find our work useful in your research, please consider citing the origina
   journal={arXiv preprint arXiv:2011.10033},
   year={2020}
 }
-@software{githubGitHubJaywu109Cylinder3DSpconv22PyTorchLightning,,
+@software{githubGitHubJaywu109Cylinder3DSpconv22PyTorchLightning,
   author = {Wu, Dai-Jie},
-	title = {{G}it{H}ub - jaywu109/{C}ylinder3{D}-{S}pconv-2.2-{P}y{T}orch-{L}ightning --- github.com},
+  title = {{G}it{H}ub - jaywu109/{C}ylinder3{D}-{S}pconv-2.2-{P}y{T}orch-{L}ightning --- github.com},
   url = {https://github.com/jaywu109/Cylinder3D-Spconv-2.2-PyTorch-Lightning},
   year = {2023}
 }
