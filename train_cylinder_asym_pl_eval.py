@@ -228,12 +228,15 @@ if __name__ == '__main__':
     parser.add_argument('-y', '--config_path', default='config/semantickitti_pl.yaml')
     args = parser.parse_args()
 
-    config_path = args.config_path
-    configs = load_config_data(config_path)    
+    path = '/public/home/wudj/Cylinder3D_spconv_v2/logs_multiple_test_2/epoch=00-step=478-val_miou=44.159.ckpt'
+    checkpoint = torch.load(path)
+    configs = checkpoint['hyper_parameters']
+    
+    # configs['train_params']['gpus'] = [0]
     train_params = configs['train_params']
     logdir = train_params['logdir']
 
-    model = Cylinder3D(configs)
+    model = Cylinder3D.load_from_checkpoint(path, configs=configs)
 
     gpus = train_params['gpus']
     gpu_num = len(gpus)
@@ -243,20 +246,6 @@ if __name__ == '__main__':
         precision = '16'
     else:
         precision = '32'
-
-    if not os.path.exists(logdir):
-        os.makedirs(logdir)
-
-    checkpoint = ModelCheckpoint(dirpath=f'{logdir}',
-                                 save_last=True,
-                                 save_top_k=5,
-                                 mode='max',
-                                 every_n_epochs=1,
-                                 filename="{epoch:02d}-{step}-{val_miou:.3f}",
-                                 monitor="val_miou")
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir=logdir,
-                                             name=None,
-                                             version='')
 
     if gpu_num > 1:
         strategy='ddp'
@@ -271,17 +260,10 @@ if __name__ == '__main__':
         num_nodes=1,
         precision = precision,
         accelerator='gpu',
-        callbacks=[
-            checkpoint,
-            LearningRateMonitor(),
-        ],
         strategy=strategy,
         use_distributed_sampler=use_distributed_sampler,
-        logger=tb_logger,
     )
 
-
-    # ckpt_path = '/public/home/wudj/Cylinder3D_spconv_v2/logs_multiple_gpu/epoch=27-step=8344-val_miou=61.860.ckpt'
-    trainer.fit(model, 
-                # ckpt_path=ckpt_path
+    trainer.test(model, 
+                dataloaders=model.val_dataloader()
                 )    

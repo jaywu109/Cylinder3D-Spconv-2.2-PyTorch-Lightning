@@ -59,7 +59,6 @@ train_params = Map(
         "gpus": Seq(Int()),
         "logdir": Str(),
         "max_num_epochs": Int(),
-        "checkpoint_every_n_epochs": Float(),
         "base_lr": Float(),
         "weight_decay": Float(),
         "mixed_fp16": Bool()
