@@ -71,8 +71,10 @@ class Cylinder3D(pl.LightningModule):
                                                                         self.train_dataloader_config,
                                                                         self.val_dataloader_config,
                                                                         grid_size=self.grid_size) 
-        self.training_step_outputs = []
-        self.eval_step_outputs = []
+        # self.training_step_outputs = []
+        # self.eval_step_outputs = []
+        self.training_step_outputs = {'loss_list': [], 'first_step': None}
+        self.eval_step_outputs = {'loss_list': [], 'hist_sum': None}
 
     def setup(self, stage=None):
         """
@@ -126,13 +128,33 @@ class Cylinder3D(pl.LightningModule):
         loss = self.lovasz_softmax(torch.nn.functional.softmax(predict_vox_labels), label_tensor, ignore=0) + self.loss_func(
             predict_vox_labels, label_tensor)              
         
-        train_loss_gather = self.all_gather(loss).mean()
+        self.training_step_outputs['loss_list'].append(loss.cpu().detach())
+        if self.training_step_outputs['first_step'] == None:
+            self.training_step_outputs['first_step'] = self.global_step
 
         if self.global_rank == 0:
-            self.log('train_loss_step', train_loss_gather, prog_bar=True, rank_zero_only=True)
-            self.logger.experiment.add_scalar('train_loss_step', train_loss_gather, self.global_step)   
+            self.log('train_loss_step', loss, prog_bar=True, rank_zero_only=True, logger=False) 
 
         return loss
+    
+    def on_train_epoch_end(self):
+        loss_list = torch.stack(self.training_step_outputs['loss_list']).to(self.device)
+        loss_list = self.all_gather(loss_list)
+        if self.gpu_num > 1:
+            loss_step_mean = loss_list.mean(dim=0)
+        else:
+            loss_step_mean = loss_list
+
+        if self.global_rank == 0:
+            first_step = self.training_step_outputs['first_step']
+            for loss, step in zip(loss_step_mean, range(first_step, first_step+len(loss_step_mean))):
+                self.logger.experiment.add_scalar('train_loss_step', loss, step)   
+            
+            self.logger.experiment.add_scalar('train_loss_epoch', loss_step_mean.mean(), self.current_epoch)
+
+        del loss_list, loss_step_mean
+        self.training_step_outputs['loss_list'].clear()
+        self.training_step_outputs['first_step'] = None
 
     def eval_share_step(self, batch, batch_idx):
         _, vox_label, grid, pt_labs, pt_fea = batch
@@ -154,39 +176,32 @@ class Cylinder3D(pl.LightningModule):
                                                 grid[count][:, 2]], torch.tensor(pt_labs[count]).type(torch.LongTensor).to(self.device),
                                             self.unique_label))
             
-        hist_sum = sum(hist_list)    
-        if self.gpu_num > 1:   
-            hist_sum = sum(self.all_gather(hist_sum))
-        validation_loss_gather = self.all_gather(loss).mean()
+        self.eval_step_outputs['loss_list'].append(loss.cpu().detach())
 
-        if self.global_rank == 0:   
-                self.eval_step_outputs.append({'loss':validation_loss_gather.cpu().detach(), 'hist': hist_sum.cpu().detach()})
+        hist_sum = sum(hist_list).cpu().detach()
+        if self.eval_step_outputs['hist_sum'] == None:
+            self.eval_step_outputs['hist_sum'] = hist_sum
+        else:
+            self.eval_step_outputs['hist_sum'] = sum([self.eval_step_outputs['hist_sum'], hist_sum])
 
     def validation_step(self, batch, batch_idx):
         self.eval_share_step(batch, batch_idx)
 
     def on_validation_epoch_end(self):
+        loss_mean = torch.stack(self.eval_step_outputs['loss_list']).to(self.device).mean()
+        loss_mean = self.all_gather(loss_mean).mean()
+
+        hist_sum = self.eval_step_outputs['hist_sum'].to(self.device)
+        if self.gpu_num > 1:
+            hist_sum = sum(self.all_gather(hist_sum))
+
         if self.global_rank == 0:
+            self.log('val_loss', loss_mean, prog_bar=True, logger=False)
+            self.logger.experiment.add_scalar('val_loss', loss_mean, self.global_step)   
 
-            loss_list = []
-            hist_list = []
-            for output in self.eval_step_outputs:
-                loss_list.append(output['loss'])
-                hist_list.append(output['hist'])
-
-            val_loss_mean = torch.stack(loss_list).mean() 
-            hist_sum = sum(hist_list)
-
-            self.log('val_loss', val_loss_mean, prog_bar=True, logger=False)
-            self.logger.experiment.add_scalar('val_loss', val_loss_mean, self.global_step)   
-
-            iou = per_class_iu(hist_sum.numpy())
-
+            iou = per_class_iu(hist_sum.cpu().numpy())
             val_miou = torch.tensor(np.nanmean(iou) * 100).to(self.device)  
             self.logger.experiment.add_scalar('val_miou', val_miou, self.global_step)   
-
-            self.eval_step_outputs.clear()
-
         else:
             val_miou = torch.tensor(0).to(self.device)  
         
@@ -195,17 +210,19 @@ class Cylinder3D(pl.LightningModule):
 
         self.log('val_miou', val_miou, prog_bar=True, logger=False)
 
+        del loss_mean, hist_sum
+        self.eval_step_outputs['loss_list'].clear()
+        self.eval_step_outputs['hist_sum'] = None
+
     def test_step(self, batch, batch_idx):
         self.eval_share_step(batch, batch_idx)
 
     def on_test_epoch_end(self):
+        hist_sum = self.eval_step_outputs['hist_sum'].to(self.device)
+        if self.gpu_num > 1:
+            hist_sum = sum(self.all_gather(hist_sum))
+
         if self.global_rank == 0:
-
-            hist_list = []
-            for output in self.eval_step_outputs:
-                hist_list.append(output['hist'])
-
-            hist_sum = sum(hist_list)
 
             iou = per_class_iu(hist_sum.numpy())
             print('Validation per class iou: ')
@@ -213,7 +230,9 @@ class Cylinder3D(pl.LightningModule):
                 print('%s : %.2f%%' % (class_name, class_iou * 100))            
             print('%s : %.2f%%' % ('miou', np.nanmean(iou) * 100))      
 
-            self.eval_step_outputs.clear()
+        del hist_sum
+        self.eval_step_outputs['loss_list'].clear()
+        self.eval_step_outputs['hist_sum'] = None
 
 
     def configure_optimizers(self):
