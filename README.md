@@ -14,7 +14,11 @@ pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 --extra-index-url http
 ```
 pip install --no-index torch-scatter -f https://data.pyg.org/whl/torch-1.12.1+cu113.html
 ```
-4. Install other dependencies
+4. Install spconv
+```
+pip install spconv-cu114==2.2.6
+```
+5. Install other dependencies
 ```
 pip install -r requirements.txt
 ```

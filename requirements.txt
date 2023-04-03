@@ -4,6 +4,5 @@ numpy==1.22.3
 pytorch_lightning==2.0.0
 PyYAML==6.0
 cumm-cu114==0.3.7
-spconv_cu114==2.2.6
 strictyaml==1.6.1
 tqdm==4.64.1
