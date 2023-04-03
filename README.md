@@ -3,7 +3,8 @@
 ### Installation
 1. Create conda environment with following command:
 ```
-conda env create --name envname --file=environments.yml
+cd Cylinder3D-Spconv-2.2-PyTorch-Lightning
+conda env create --name envname --file=environment.yml
 ```
 2. Install PyTorch
 ```
